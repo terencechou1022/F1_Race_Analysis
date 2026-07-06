@@ -5,7 +5,7 @@ Gemini_API_Key.txt
 
 # 可重生的大型資料
 fastf1_cache/
-fastf1_output/
+output/
 
 # Python
 __pycache__/

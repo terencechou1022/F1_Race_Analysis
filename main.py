@@ -92,7 +92,7 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(errors="replace")
 
 CACHE_DIR = Path("./fastf1_cache")
-OUTPUT_DIR = Path("./fastf1_output")
+OUTPUT_DIR = Path("./output")
 NOTES_DIR = Path("./notes")   # 賽事筆記(使用者手寫,選用;不存在 = 無筆記)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
