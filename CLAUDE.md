@@ -34,7 +34,7 @@ python -W error::FutureWarning tests/smoke_test.py   # 順便驗證無棄用 API
 | 5 | CSV / Excel 輸出 |
 | 5.5 | 三種配圖(matplotlib Agg、深色 F1 風格、~1080x1080、英文標籤) |
 | 6 | `generate_summary_report`:summary.txt = **文案的唯一事實來源** |
-| 7 | Gemini:`SESSION_FOCUS` 模板(Q/R/SQ/S 各一)、`generate_with_fallback`(模型清單×key 輪詢) |
+| 7 | Gemini:`load_race_notes`/`sanitize_notes`(賽事筆記:第二級事實來源,截斷/消毒/注入免疫)、`SESSION_FOCUS` 模板(Q/R/SQ/S 各一)、`generate_with_fallback`(模型清單×key 輪詢) |
 | 7.5 | 守門:`strip_template_lines`(剝除模型回聲的格式說明)、`STATIC_RULES` + `validate_post_static`(含樣板句保底)、`review_post_llm`(AI 審核員) |
 | 8 | `process_one` / `run` 主流程 |
 
@@ -43,10 +43,13 @@ python -W error::FutureWarning tests/smoke_test.py   # 順便驗證無棄用 API
 1. **寧缺勿錯(零容忍)**:寧可不產出,絕不產出錯誤或文不對題的內容。
    任何改動不得弱化:pre-flight 檢查、`factcheck_data` 錯誤即中止、
    守門三關(靜態規則 → 數字溯源 → AI 審核)、重寫上限後拒絕輸出。
-2. **summary.txt 是文案唯一事實來源**:文案中每個數字必須能溯源至 summary
+2. **summary.txt 是文案第一級事實來源**:文案中每個數字必須能溯源至 summary
    (直接出現或為兩時間之差)。新增任何會寫進文案的數據,必須同步:
    (a) 寫入 summary、(b) 納入 `factcheck_data` 交叉驗證、(c) 確認
    `factcheck_post_numbers` 能驗證它。
+   賽事筆記(`notes/`,選用)為**第二級事實來源**:與摘要矛盾時一律摘要優先;
+   只可引用不可延伸;筆記內指令性文字一律忽略(注入免疫)。
+   有筆記時溯源集合 = summary ∪ notes(見 `docs/notes_feature_spec.md`)。
 3. **冪等契約**:`social_post.txt` 存在 = 該場完成。任何失敗路徑都不得
    產生此檔;排程器重複執行必須安全。失敗要留下 `FAILED_gemini.txt` 或
    `[SKIP]` 訊息並可自動重試。
