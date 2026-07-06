@@ -28,7 +28,7 @@ FastF1 賽後自動分析 + FB/IG 社群文案生成器(萬用賽季版)
 萬用性設計
 ----------
 - year=None(預設)= 自動偵測賽季,明年、後年都不用改任何設定
-- 自動模式有「回溯窗口」(max_lookback_days,預設 14 天):
+- 自動模式有「回溯窗口」(max_lookback_days,預設 7 天):
   只處理最近完賽的場次,避免你在新賽季中途首次啟用時,
   一口氣回填整季幾十場、燒光 Gemini 額度
 - 想補做歷史場次(任何年份)→ 用手動模式:
@@ -121,7 +121,7 @@ class AutoConfig:
     # [萬用防呆] 回溯窗口:自動模式只處理最近 N 天內完賽的場次,
     # 避免賽季中途首次啟用時誤觸整季回填、燒光 API 額度。
     # None = 不限制(小心使用);手動模式不受此限,補做歷史請走手動模式。
-    max_lookback_days: Optional[int] = 14
+    max_lookback_days: Optional[int] = 7
     force_rerun: bool = False            # True = 即使已有輸出也重跑(會重新呼叫 Gemini)
     # [賽事筆記] 筆記長度上限(字元);超過即截斷並於終端與查核報告警告
     notes_max_chars: int = 2000
@@ -2178,7 +2178,7 @@ if __name__ == "__main__":
         include_sprint=True,        # 衝刺週末也處理 SQ / S
         auto_latest=True,           # 自動找「最近完賽、未處理」的場次
         session_end_buffer_hours=2.0,
-        max_lookback_days=14,       # 只自動處理最近 14 天內完賽的場次
+        max_lookback_days=7,        # 只自動處理最近 7 天內完賽的場次
         force_rerun=False,
 
         # 補做歷史場次範例(任何年份都可以):
