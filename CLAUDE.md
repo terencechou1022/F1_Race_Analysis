@@ -91,17 +91,17 @@ python -W error::FutureWarning tests/smoke_test.py   # 順便驗證無棄用 API
 
 - **絕不 commit `Gemini_API_Key.txt`**(.gitignore 已涵蓋;新增任何含密鑰的
   檔案先加入 .gitignore)。
-- `fastf1_cache/`、`fastf1_output/` 體積大且可重生,不進版控。
+- `fastf1_cache/`、`output/` 體積大且可重生,不進版控。
 
 ## 輸出結構(生產)
 
 ```
-fastf1_output/{year}/round_{NN}/{Q|R|SQ|S}/
+output/{year}/round_{NN}/{Q|R|SQ|S}/
 ├── social_post.txt        # 完成標記 + 最終文案(FB版+IG版)
 ├── summary.txt            # 文案唯一事實來源
 ├── factcheck_report.txt   # 查核軌跡
 ├── fastest_laps.csv / strategy_laps.csv / pit_laps.csv / analysis.xlsx
 ├── chart_*.png            # 配圖(Q/SQ 一張;S 兩張;R 三張)
 └── FAILED_gemini.txt / rejected_draft_N.txt   # 僅失敗時存在
-fastf1_output/SESSION_ALERT.txt                 # 僅名稱異動時存在
+output/SESSION_ALERT.txt                        # 僅名稱異動時存在
 ```
