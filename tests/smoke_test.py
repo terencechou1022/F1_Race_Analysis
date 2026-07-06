@@ -377,6 +377,14 @@ rpt = m.write_factcheck_report(TMP, ['ok'], [], [], ['d'], [], 'ok',
     .read_text(encoding='utf-8')
 check('report session desc', '場次:2026 Test GP(Round 9)正賽' in rpt)
 
+# 4.17 賽程取得失敗(賽季未公布/伺服器故障)→ 優雅回空三元組,不得崩潰
+_bak_sched = m.fastf1.get_event_schedule
+def _sched_boom(year, include_testing=False):
+    raise RuntimeError('schedule not available')
+m.fastf1.get_event_schedule = _sched_boom
+check('sched-fail graceful', m.find_pending_targets(m.AutoConfig(), 2099) == ([], [], []))
+m.fastf1.get_event_schedule = _bak_sched
+
 # ---- 5. 端對端:衝刺週末四場 ----
 m.load_api_keys = lambda f: ['k1']
 m.OUTPUT_DIR = TMP / 'e2e'; m.OUTPUT_DIR.mkdir()
