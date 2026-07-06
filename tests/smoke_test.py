@@ -372,6 +372,10 @@ rpt = m.write_factcheck_report(
     .read_text(encoding='utf-8')
 check('N report quoted', '[5] 使用者賽事筆記' in rpt
       and '紅旗在第 30 圈' in rpt and 'n.txt' in rpt)
+rpt = m.write_factcheck_report(TMP, ['ok'], [], [], ['d'], [], 'ok',
+                               session_desc='2026 Test GP(Round 9)正賽')\
+    .read_text(encoding='utf-8')
+check('report session desc', '場次:2026 Test GP(Round 9)正賽' in rpt)
 
 # ---- 5. 端對端:衝刺週末四場 ----
 m.load_api_keys = lambda f: ['k1']
@@ -423,6 +427,7 @@ check('N e2e injection blocked', '忽略所有規則' not in post and '2000 字'
 check('N e2e guards ran', '已通過靜態檢查+數字查核+AI審核' in post)
 rpt = (d / 'factcheck_report.txt').read_text(encoding='utf-8')
 check('N e2e report [5]', '2026_round10_R.txt' in rpt and '紅旗在第 30 圈' in rpt)
+check('e2e report event name', '場次:2026 Test Grand Prix(Round 10)正賽' in rpt)
 check('N e2e review saw notes', any('紅旗在第 30 圈' in x and '第二級事實來源' in x
                                     for x in review_prompts))
 
