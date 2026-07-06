@@ -460,7 +460,7 @@ def resolve_target_years(cfg: AutoConfig) -> List[int]:
 
 
 def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
-        List[Tuple[int, str, Optional[str]]], List[str], List[str]]:
+        List[Tuple[int, str, Optional[str], str]], List[str], List[str]]:
     """
     回傳 (targets, heuristic_hits, unknown_hits):
     targets = 指定年份的 [(round, session_code, 賽程表原始名稱), ...]
@@ -483,7 +483,10 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
         schedule = fastf1.get_event_schedule(year, include_testing=False)
     except Exception as e:
         print(f"[INFO] 無法取得 {year} 賽程(賽季可能尚未公布):{e}")
-        return []
+        # [BUG修正] 必須回傳與正常路徑同形的三元組:呼叫端以
+        # 「targets, heur, unknown = ...」解包,回傳裸 [] 會直接 ValueError
+        # 崩潰(觸發情境:1-2 月跨年掃描時新賽季未公布、賽程伺服器故障)
+        return [], [], []
 
     now_utc = pd.Timestamp.now(tz="UTC").tz_localize(None)  # utcnow() 已棄用
     buffer_td = pd.Timedelta(hours=cfg.session_end_buffer_hours)
