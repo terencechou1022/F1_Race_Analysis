@@ -426,5 +426,38 @@ check('N e2e report [5]', '2026_round10_R.txt' in rpt and '紅旗在第 30 圈' 
 check('N e2e review saw notes', any('紅旗在第 30 圈' in x and '第二級事實來源' in x
                                     for x in review_prompts))
 
+# ---- 5.6 並列事實不得焊成因果:條款存在 + 模擬合規審核員跑完整管線 ----
+rp = m.build_review_prompt('摘要', '文', 'R', True, notes_text='A。B。')
+check('N2 causal clause present', '不得改寫為因果關係' in rp and '除非筆記明確寫出因果' in rp)
+check('N2 causal clause notes-only', '不得改寫為因果關係'
+      not in m.build_review_prompt('摘要', '文', 'R', True))
+
+_causal_state = {'n': 0}
+def causal_gen(key, prompt, model, temperature=0.7):
+    if '審核員' in prompt:
+        # 模擬「遵守新條款」的審核員:筆記未明寫因果、文案卻出現「因」→ 退
+        notes_seg = prompt.split('=== 使用者賽事筆記')[1].split('=== 筆記結束')[0]
+        post_seg = prompt.split('=== 待審核文案 ===')[1]
+        if '因' in post_seg and '因' not in notes_seg:
+            return '{"pass": false, "issues": ["筆記為並列事實,文案改寫為因果關係"]}'
+        return '{"pass": true, "issues": []}'
+    _causal_state['n'] += 1
+    if _causal_state['n'] == 1:   # 第一稿:把並列焊成因果(應被退)
+        return '=== FB版 ===\nANT 因前輪擋板故障被加罰\n=== IG版 ===\nANT 被罰\n#F1'
+    return '=== FB版 ===\nANT 前輪擋板故障;賽後被加罰\n=== IG版 ===\nANT 被罰\n#F1'
+m.gemini_generate = causal_gen
+_cd = TMP / 'causal'; _cd.mkdir()
+_sp = _cd / 'summary.txt'; _sp.write_text('P1 ANT 92.451s', encoding='utf-8')
+res = m.generate_social_post(_sp, _cd, cfg, 'GP', 2026, 9, 'R', True,
+                             notes_text='ANT 前輪擋板故障。ANT 賽後被加罰。')
+check('N2 weld rejected then ok', res is not None and _causal_state['n'] == 2)
+
+_causal_state['n'] = 0            # 筆記明寫因果 → 因果寫法第一稿即過
+_cd2 = TMP / 'causal2'; _cd2.mkdir()
+_sp2 = _cd2 / 'summary.txt'; _sp2.write_text('P1 ANT 92.451s', encoding='utf-8')
+res = m.generate_social_post(_sp2, _cd2, cfg, 'GP', 2026, 9, 'R', True,
+                             notes_text='ANT 因前輪擋板故障被加罰。')
+check('N2 explicit causal ok', res is not None and _causal_state['n'] == 1)
+
 shutil.rmtree(TMP, ignore_errors=True)
 print(f'\n全部通過:{len(PASSED)} 項檢查')
