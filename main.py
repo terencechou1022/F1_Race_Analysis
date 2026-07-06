@@ -749,6 +749,42 @@ def derive_pit_counts(laps) -> Dict[str, int]:
     return out
 
 
+def _is_finish_status(status) -> bool:
+    """官方 Status 是否為「完賽」:Finished 或落後 N 圈(Lapped / +1 Lap 等)。"""
+    s = str(status).lower()
+    return ("finished" in s) or ("lap" in s)
+
+
+def derive_dnf_entries(session) -> List[Tuple[str, Optional[int], str]]:
+    """
+    [C·DNF 區塊] 從官方 results 找出未完賽車手,回傳
+    [(車手, 完賽圈數, Status 官方原文), ...](依官方名次排序)。
+    - DNF 判定:Status 非 Finished / Lapped 類(Retired、Accident、DQ...)
+    - 完賽圈數 = 該車手在原始 laps 的最大圈號(無圈記錄則 None → summary 顯示 N/A)
+    - Status 一律保留官方原文,文案只能引用原文,不得推斷退賽原因
+    """
+    res = getattr(session, "results", None)
+    if res is None or res.empty or "Status" not in res.columns:
+        return []
+    laps = getattr(session, "laps", None)
+    last_laps: Dict[str, Any] = {}
+    if (laps is not None and not laps.empty
+            and {"Driver", "LapNumber"}.issubset(laps.columns)):
+        last_laps = (laps.dropna(subset=["Driver"])
+                         .groupby("Driver")["LapNumber"].max().to_dict())
+    out: List[Tuple[str, Optional[int], str]] = []
+    res_sorted = res.sort_values("Position") if "Position" in res.columns else res
+    for _, r in res_sorted.iterrows():
+        status = r.get("Status")
+        if status is None or pd.isna(status) or _is_finish_status(status):
+            continue
+        drv = str(r.get("Abbreviation"))
+        last = last_laps.get(drv)
+        out.append((drv, int(last) if last is not None and pd.notna(last) else None,
+                    str(status)))
+    return out
+
+
 def factcheck_data(session, session_code: str,
                    fastest_df: Optional[pd.DataFrame],
                    strategy_df: Optional[pd.DataFrame],
@@ -870,6 +906,24 @@ def factcheck_data(session, session_code: str,
         detail.append(f"summary stint 數 vs 原始資料:{len(facts)} 位車手相等性驗證"
                       + ("" if mism == 0 else f",{mism} 位不符"))
 
+    # ---- 查核 6:[DNF] 完賽圈數 vs 原始圈資料(相等性)----
+    # [C·DNF 區塊] summary 的完賽圈數會被文案以「第 N 圈退賽」引用,
+    # 此處以獨立算式重算該車手的最大圈號並要求相等,防推導漂移。
+    if session_code in ("R", "S"):
+        dnf = derive_dnf_entries(session)
+        if dnf and laps is not None and {"Driver", "LapNumber"}.issubset(laps.columns):
+            src_last = laps.dropna(subset=["Driver"]).groupby("Driver")["LapNumber"].max()
+            mism = 0
+            for drv, last, _status in dnf:
+                src = src_last.get(drv)
+                src = int(src) if src is not None and pd.notna(src) else None
+                if last != src:
+                    mism += 1
+                    errors.append(f"{drv} DNF 完賽圈數:summary 推導 {last},"
+                                  f"但原始資料最大圈號為 {src}")
+            detail.append(f"DNF 完賽圈數 vs 原始資料:{len(dnf)} 位退賽車手相等性驗證"
+                          + ("" if mism == 0 else f",{mism} 位不符"))
+
     return errors, warns, detail
 
 
@@ -921,6 +975,15 @@ def factcheck_post_numbers(post: str, summary_text: str) -> List[str]:
     summ_stops = set(re.findall(r"進站次數\s*(\d+)", summary_text))
     for c in sorted(post_stops - summ_stops, key=int):
         issues.append(f"文案提到「{c} 停/進站 {c} 次」,但摘要中沒有任何車手的進站次數是 {c}")
+
+    # [C·DNF 區塊] 圈號引用:「第 N 圈」必須溯源至摘要的「完賽圈數 N」
+    # (摘要唯一記錄圈號的欄位)。同時堵住「第 17 圈」型捏造——把輪胎壽命
+    # 或編造的圈號寫成比賽圈數(首次實測 S 場退稿原因之一)。
+    summ_laps = set(re.findall(r"完賽圈數\s*(\d+)", summary_text))
+    post_laps = set(re.findall(r"第\s*(\d+)\s*圈", post))
+    for n in sorted(post_laps - summ_laps, key=int):
+        issues.append(f"文案提到「第 {n} 圈」,但摘要中沒有可溯源的圈號"
+                      f"(摘要僅記錄退賽車手的完賽圈數),請刪除或改寫")
 
     return issues
 
@@ -1262,6 +1325,14 @@ def race_results_lines(session) -> List[str]:
                 f"({fmt_val(r.get('TeamName'))}) | Grid P{fmt_val(r.get('GridPosition'))} "
                 f"| Status: {fmt_val(r.get('Status'))} | Pts: {fmt_val(r.get('Points'))}"
             )
+
+        # [C·DNF 區塊] 未完賽車手(名次區塊只列前 10,退賽者在此呈現;
+        # 完賽圈數由查核 6 與原始 laps 交叉驗證,Status 為官方原文)
+        dnf = derive_dnf_entries(session)
+        if dnf:
+            lines.append("\n[DNF]")
+            for drv, last, status in dnf:
+                lines.append(f"- {drv}: 完賽圈數 {fmt_val(last)} | Status: {status}")
     except Exception as e:
         print(f"[WARN] 無法讀取正賽結果:{e}")
     return lines
@@ -1411,7 +1482,8 @@ SESSION_FOCUS = {
 - 輪胎策略:幾停、用胎順序、誰的策略奏效/失敗
 - 進站對名次的影響(undercut / overcut)
 - 最快圈與各車手長跑節奏(stint 代表圈)
-- 積分影響(若摘要有 Pts 數據)""",
+- 積分影響(若摘要有 Pts 數據)
+- 退賽:若摘要有 [DNF] 區塊,可提及退賽車手(僅限完賽圈數與官方 Status 原文,不得推斷原因)""",
 }
 
 # 衝刺週末額外注入的防混淆說明
@@ -1464,7 +1536,7 @@ Instagram 貼文,約 100~200 字:
 
 寫作規則:
 1. 語言:{cfg.language}。口語自然、有態度,但數據要準確。
-2. 只能使用下方摘要中出現的數據與事實。摘要沒有的資訊(例如天氣、事故細節、電視轉播畫面)一律不要編造;不確定就用保守措辭或省略。
+2. 只能使用下方摘要中出現的數據與事實。摘要沒有的資訊(例如天氣、事故細節、電視轉播畫面)一律不要編造;不確定就用保守措辭或省略。若摘要有 [DNF] 區塊,可陳述「X 於第 N 圈退賽(官方分類:Status 原文)」;但絕不可推斷或編造退賽原因(碰撞、機械故障、事故等皆屬編造),官方 Status 原文以外的細節不要寫。
 3. 數字鐵則(會被程式逐一驗證):文案中出現的每個秒數,必須「直接取自摘要」或「等於摘要中兩個時間相減的秒差」;名次(P幾)與進站次數必須與摘要完全一致。無法溯源的數字一律不要寫。秒數請保持摘要的純秒數格式(如 92.451 秒),不要換算成「1分32秒451」或「1:32.451」。
 4. 摘要中顯示 "N/A" 的數據代表缺漏,直接略過,不要提及。
 5. 車手請用縮寫或常見譯名皆可,但同一篇內保持一致。
@@ -1616,6 +1688,8 @@ def build_review_prompt(summary_text: str, post: str,
    - 若這是正賽(R)且為衝刺週末,文案把衝刺賽結果當成正賽結果 → 不通過
 2. 數據依據:文案中的所有名次、秒數、進站次數、積分,是否都能在下方數據摘要中找到依據?
    - 摘要中不存在的數據或事件(天氣、事故、超車畫面等)被寫成事實 → 不通過
+   - 退賽描述:只能引用摘要 [DNF] 區塊的完賽圈數與官方 Status 原文;
+     推斷或編造退賽原因(碰撞、故障、事故等) → 不通過
    - 合理的評論、觀點、修辭不算捏造
 3. 車手/車隊:文案提到的車手是否出現在摘要中?寫錯名次歸屬 → 不通過
 

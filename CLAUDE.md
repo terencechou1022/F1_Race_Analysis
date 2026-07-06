@@ -30,12 +30,12 @@ python -W error::FutureWarning tests/smoke_test.py   # 順便驗證無棄用 API
 | 2 | 工具函式:`fmt_s`/`fmt_val`(None 安全格式化)、`to_seconds`、session 載入 |
 | 3 | 自動偵測:`resolve_target_years`(賽季+跨年)、`find_pending_targets`(回溯窗口)、`classify_session_name`(名稱三層分類)、`sanity_check_session_definitions`(啟動自檢) |
 | 4 | 三種分析:`mode_fastest` / `mode_strategy`(stint 代表圈)/ `mode_pit`(進站窗口) |
-| 4.5 | `check_data_availability`(pre-flight)、`factcheck_data`(數據交叉驗證)、`factcheck_post_numbers`(文案數字溯源)、`write_factcheck_report` |
+| 4.5 | `check_data_availability`(pre-flight)、`derive_stint_overview`/`derive_pit_counts`/`derive_dnf_entries`(summary 事實推導,一律從原始 laps/results 算)、`factcheck_data`(數據交叉驗證,含對前述推導的相等性查核)、`factcheck_post_numbers`(文案數字溯源,含「第 N 圈」須溯源至完賽圈數)、`write_factcheck_report` |
 | 5 | CSV / Excel 輸出 |
 | 5.5 | 三種配圖(matplotlib Agg、深色 F1 風格、~1080x1080、英文標籤) |
 | 6 | `generate_summary_report`:summary.txt = **文案的唯一事實來源** |
 | 7 | Gemini:`SESSION_FOCUS` 模板(Q/R/SQ/S 各一)、`generate_with_fallback`(模型清單×key 輪詢) |
-| 7.5 | 守門:`STATIC_RULES` + `validate_post_static`、`review_post_llm`(AI 審核員) |
+| 7.5 | 守門:`strip_template_lines`(剝除模型回聲的格式說明)、`STATIC_RULES` + `validate_post_static`(含樣板句保底)、`review_post_llm`(AI 審核員) |
 | 8 | `process_one` / `run` 主流程 |
 
 ## 不可違反的設計原則(修改任何程式碼前先讀這段)
