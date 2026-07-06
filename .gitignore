@@ -1,0 +1,18 @@
+# 密鑰 —— 絕對不可 commit
+Gemini_API_Key.txt
+*.key
+.env
+
+# 可重生的大型資料
+fastf1_cache/
+fastf1_output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 測試暫存
+tests/.tmp/
+

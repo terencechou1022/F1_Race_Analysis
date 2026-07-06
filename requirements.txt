@@ -1,0 +1,5 @@
+fastf1>=3.4
+pandas>=2.0
+openpyxl>=3.1
+matplotlib>=3.7
+google-genai>=1.0
