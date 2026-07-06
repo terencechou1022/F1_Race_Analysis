@@ -490,7 +490,7 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
     lookback_td = (pd.Timedelta(days=cfg.max_lookback_days)
                    if cfg.max_lookback_days is not None else None)
 
-    targets: List[Tuple[int, str, Optional[str]]] = []
+    targets: List[Tuple[int, str, Optional[str], str]] = []  # (rnd, code, sched_name, event_name)
     heuristic_hits: List[str] = []
     unknown_hits: List[str] = []
     skipped_old = 0
@@ -526,7 +526,7 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
             if not cfg.force_rerun and social_post_path(out_dir).exists():
                 continue  # 已處理過
 
-            targets.append((rnd, code, name))
+            targets.append((rnd, code, name, ev_name))
 
     if skipped_old:
         print(f"[INFO] {year} 有 {skipped_old} 場「完賽超過 {cfg.max_lookback_days} 天且未處理」"
@@ -1009,12 +1009,15 @@ def write_factcheck_report(out_dir: Path, availability_lines: List[str],
                            data_errors: List[str], data_warns: List[str],
                            data_detail: List[str], chart_paths: List[Path],
                            post_check_note: str,
+                           session_desc: str = "",
                            notes_text: str = "",
                            notes_meta: Optional[Dict[str, Any]] = None) -> Path:
     """[需求2·報告層] 每場輸出完整查核軌跡,供人工複查。"""
-    lines = [f"事實查核報告(產生於 {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')})",
-             "=" * 60,
-             "\n[1] 資料可用性(pre-flight)"]
+    lines = [f"事實查核報告(產生於 {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')})"]
+    if session_desc:
+        lines.append(f"場次:{session_desc}")
+    lines += ["=" * 60,
+              "\n[1] 資料可用性(pre-flight)"]
     lines += availability_lines
 
     lines.append("\n[2] 數據層交叉驗證(分析產出 vs FastF1 原始資料)")
@@ -1995,9 +1998,17 @@ def process_one(cfg: AutoConfig, year: int, rnd: int, session_code: str,
     if session is None:
         return False
 
+    # 場次描述(顯示用):大獎賽名稱 + 站次 + session 類型
+    try:
+        event_name = str(session.event["EventName"])
+    except Exception:
+        event_name = f"Round {rnd}"
+    session_desc = (f"{year} {event_name}(Round {rnd})"
+                    f"{SESSION_LABEL.get(session_code, session_code)}")
+
     # ---- [需求1] 資料可用性 pre-flight 檢查 ----
     available, avail_lines = check_data_availability(session, session_code, cfg)
-    print(f"[CHECK] {year} Round {rnd} {session_code} 資料可用性:")
+    print(f"[CHECK] {session_desc} 資料可用性:")
     for ln in avail_lines:
         print(f"        {ln}")
     if not available:
@@ -2058,6 +2069,7 @@ def process_one(cfg: AutoConfig, year: int, rnd: int, session_code: str,
             write_factcheck_report(out_dir, avail_lines, data_errors, data_warns,
                                    data_detail, [],
                                    "✗ 因數據層錯誤中止,未進行文案生成",
+                                   session_desc=session_desc,
                                    notes_text=notes_text, notes_meta=notes_meta)
             return False
         print(f"[FACTCHECK] 數據交叉驗證通過"
@@ -2073,7 +2085,6 @@ def process_one(cfg: AutoConfig, year: int, rnd: int, session_code: str,
     print(f"[OK] 摘要已產出:{summary_path}")
 
     if cfg.enable_gemini:
-        event_name = str(session.event["EventName"])
         post_path = generate_social_post(summary_path, out_dir, cfg,
                                          event_name, year, rnd, session_code,
                                          is_sprint_weekend, notes_text=notes_text)
@@ -2094,6 +2105,7 @@ def process_one(cfg: AutoConfig, year: int, rnd: int, session_code: str,
         if cfg.enable_factcheck:
             report = write_factcheck_report(out_dir, avail_lines, [], data_warns,
                                             data_detail, chart_paths, post_note,
+                                            session_desc=session_desc,
                                             notes_text=notes_text, notes_meta=notes_meta)
             print(f"[OK] 事實查核報告:{report}")
         return post_path is not None
@@ -2102,6 +2114,7 @@ def process_one(cfg: AutoConfig, year: int, rnd: int, session_code: str,
         report = write_factcheck_report(out_dir, avail_lines, [], data_warns,
                                         data_detail, chart_paths,
                                         "-(未啟用文案生成)",
+                                        session_desc=session_desc,
                                         notes_text=notes_text, notes_meta=notes_meta)
         print(f"[OK] 事實查核報告:{report}")
     return True
@@ -2111,7 +2124,8 @@ def run(cfg: AutoConfig) -> None:
     # [防呆] 啟動自檢:任何 session 代碼缺模板/規則定義,直接拒絕啟動
     sanity_check_session_definitions()
 
-    targets: List[Tuple[int, int, str, Optional[str]]] = []  # (year, rnd, code, sched_name)
+    # (year, rnd, code, sched_name, event_name);event_name 僅供顯示
+    targets: List[Tuple[int, int, str, Optional[str], Optional[str]]] = []
 
     if cfg.auto_latest:
         years = resolve_target_years(cfg)
@@ -2120,7 +2134,7 @@ def run(cfg: AutoConfig) -> None:
         all_unknown: List[str] = []
         for y in years:
             y_targets, y_heur, y_unknown = find_pending_targets(cfg, y)
-            targets += [(y, r, c, n) for r, c, n in y_targets]
+            targets += [(y, r, c, n, en) for r, c, n, en in y_targets]
             all_heuristic += y_heur
             all_unknown += y_unknown
         # 彙總所有年份後一次寫警報,避免逐年寫檔互相覆蓋
@@ -2128,7 +2142,9 @@ def run(cfg: AutoConfig) -> None:
         if not targets:
             print("[INFO] 目前沒有「最近完賽但未處理」的場次。下場比賽結束後再跑即可。")
             return
-        print(f"[INFO] 待處理場次:{[(y, r, c) for y, r, c, _ in targets]}")
+        print("[INFO] 待處理場次:")
+        for y, r, c, _, en in targets:
+            print(f"        - {y} Round {r} {en or ''} {c}".rstrip())
     else:
         year = cfg.year if cfg.year is not None else pd.Timestamp.now().year
         if cfg.year is None:
@@ -2138,16 +2154,17 @@ def run(cfg: AutoConfig) -> None:
         if bad:
             print(f"[ERROR] 不支援的 session:{bad}(只支援 Q / R / SQ / S),已略過")
         codes = [c for c in codes if c in ALLOWED_SESSIONS]
-        targets = [(year, r, c, None) for r in cfg.manual_rounds for c in codes]
+        targets = [(year, r, c, None, None) for r in cfg.manual_rounds for c in codes]
         if not targets:
             print("[INFO] 手動模式下請在 manual_rounds 指定站次。")
             return
 
-    for year, rnd, code, sched_name in targets:
-        print(f"\n########## {year} Round {rnd} {code} ##########")
+    for year, rnd, code, sched_name, ev_name in targets:
+        ev_disp = f" {ev_name}" if ev_name else ""
+        print(f"\n########## {year} Round {rnd}{ev_disp} — {code} ##########")
         ok = process_one(cfg, year, rnd, code, sched_name)
         if not ok:
-            print(f"[INFO] {year} Round {rnd} {code} 未完成(可能資料還沒上),下次執行會自動重試。")
+            print(f"[INFO] {year} Round {rnd}{ev_disp} {code} 未完成(可能資料還沒上),下次執行會自動重試。")
 
 
 # =========================================================
