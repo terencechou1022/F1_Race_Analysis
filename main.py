@@ -496,7 +496,7 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
     targets: List[Tuple[int, str, Optional[str], str]] = []  # (rnd, code, sched_name, event_name)
     heuristic_hits: List[str] = []
     unknown_hits: List[str] = []
-    skipped_old = 0
+    skipped_rounds: set = set()   # 被回溯窗口略過、且尚未處理的大獎賽站次(顯示用)
 
     for _, ev in schedule.iterrows():
         rnd = int(ev["RoundNumber"])
@@ -522,7 +522,7 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
             if lookback_td is not None and now_utc - session_dt > lookback_td:
                 out_dir = OUTPUT_DIR / str(year) / f"round_{rnd:02d}" / code
                 if not social_post_path(out_dir).exists():
-                    skipped_old += 1
+                    skipped_rounds.add(rnd)
                 continue  # 超出回溯窗口
 
             out_dir = OUTPUT_DIR / str(year) / f"round_{rnd:02d}" / code
@@ -531,9 +531,9 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
 
             targets.append((rnd, code, name, ev_name))
 
-    if skipped_old:
-        print(f"[INFO] {year} 有 {skipped_old} 場「完賽超過 {cfg.max_lookback_days} 天且未處理」"
-              f"的場次,已依回溯窗口略過;要補做請用手動模式(auto_latest=False + manual_rounds)")
+    if skipped_rounds:
+        print(f"[INFO] {year} 有 {len(skipped_rounds)} 個大獎賽「完賽超過 {cfg.max_lookback_days} 天"
+              f"且未處理」,已依回溯窗口略過;要補做請用手動模式(auto_latest=False + manual_rounds)")
 
     # [BUG修正] 警報不在此處寫檔:多年份掃描時各年分別寫檔會互相覆蓋,
     # 改由呼叫端(run)彙總所有年份後一次寫入
