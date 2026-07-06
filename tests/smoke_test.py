@@ -292,6 +292,34 @@ check('D static residue rejected', any('格式說明' in i
                                        for i in m.validate_post_static(raw_post, cfg, 'S')))
 check('D cleaned passes', m.validate_post_static(cleaned, cfg, 'S') == [])
 
+# 4.15 [C] DNF 區塊:偵測 + summary 呈現 + 查核 6 相等性 + 「第 N 圈」溯源
+res2 = sc.results.copy()
+res2.loc[res2['Abbreviation'] == 'D19', 'Status'] = 'Lapped'   # 套圈完賽,不得誤判 DNF
+res2 = pd.concat([res2, pd.DataFrame([{'Abbreviation': 'X2', 'Position': 21,
+                                       'TeamName': 'T', 'GridPosition': 21,
+                                       'Status': 'Retired', 'Points': 0}])],
+                 ignore_index=True)
+sc.results = res2
+check('C dnf detect', m.derive_dnf_entries(sc) == [('X2', 5, 'Retired')])
+txt = m.generate_summary_report(sc, 'R', None, None, None, TMP).read_text(encoding='utf-8')
+check('C summary dnf', '- X2: 完賽圈數 5 | Status: Retired' in txt)
+e, w, _ = m.factcheck_data(sc, 'R', None, None, None)
+check('C xcheck pass', not e)
+_bak_dnf = m.derive_dnf_entries          # 反向:推導漂移必須被查核 6 攔下
+m.derive_dnf_entries = lambda s: [('X2', 99, 'Retired')]
+e, _, _ = m.factcheck_data(sc, 'R', None, None, None)
+check('C xcheck drift=error', any('DNF 完賽圈數' in x for x in e))
+m.derive_dnf_entries = _bak_dnf
+
+summ_dnf = 'P1 VER 92.451s\n[DNF]\n- X2: 完賽圈數 5 | Status: Retired'
+check('C lapref ok', m.factcheck_post_numbers(
+    '=== FB版 ===\nX2 於第 5 圈退賽(官方分類:Retired)\n=== IG版 ===\nx', summ_dnf) == [])
+check('C lapref fabricated', any('第 17 圈' in i for i in m.factcheck_post_numbers(
+    '=== FB版 ===\n他在第 17 圈飆出最快圈\n=== IG版 ===\nx', summ_dnf)))
+p = m.build_social_prompt('摘要', cfg, 'Test GP', 2026, 9, 'R', True)
+check('C prompt dnf rule', '[DNF]' in p and '編造退賽原因' in p)
+check('C review dnf rule', '退賽原因' in m.build_review_prompt('摘要', '文案', 'R', True))
+
 # ---- 5. 端對端:衝刺週末四場 ----
 m.load_api_keys = lambda f: ['k1']
 m.OUTPUT_DIR = TMP / 'e2e'; m.OUTPUT_DIR.mkdir()
