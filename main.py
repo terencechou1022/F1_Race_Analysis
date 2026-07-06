@@ -1397,16 +1397,20 @@ def generate_summary_report(session, session_code: str,
         valid = fastest_df[fastest_df["LapTime_s"].notna()]
         if not valid.empty:
             best = valid.sort_values("LapTime_s").iloc[0]
+            # [實測修正] 輪胎標籤自我說明化:「Life: 17」「TyreLife 17」兩度被
+            # 模型誤讀(寫成「第 17 圈」比賽圈數、「僅剩 2 圈壽命」),
+            # 改為「胎齡 N 圈」從源頭消除歧義
             lines.append("\n[Fastest Lap]")
             lines.append(f"Fastest driver: {fmt_val(best.get('Driver'))}")
             lines.append(f"Lap time: {fmt_s(best.get('LapTime_s'))}")
-            lines.append(f"Tyre: {fmt_val(best.get('Compound'))} | Life: {fmt_val(best.get('TyreLife'))}")
+            lines.append(f"Tyre: {fmt_val(best.get('Compound'))} "
+                         f"| 胎齡 {fmt_val(best.get('TyreLife'))} 圈(該套胎已使用圈數)")
 
             lines.append("\n[Top Fastest Laps]")
             for _, r in valid.sort_values("LapTime_s").head(5).iterrows():
                 lines.append(
                     f"- {fmt_val(r.get('Driver'))}: {fmt_s(r.get('LapTime_s'))} "
-                    f"| {fmt_val(r.get('Compound'))} | TyreLife {fmt_val(r.get('TyreLife'))}"
+                    f"| {fmt_val(r.get('Compound'))} | 胎齡 {fmt_val(r.get('TyreLife'))} 圈"
                 )
 
     # strategy(排位賽通常不會有)
@@ -1688,6 +1692,20 @@ def _looks_like_model_error(err: Exception) -> bool:
     return any(kw in msg for kw in ("not_found", "not found", "404", "is not supported", "deprecated"))
 
 
+def _looks_like_quota_error(err: Exception) -> bool:
+    """判斷錯誤是否為「額度/負載類」(429 額度、503 高負載),短時間內重試同模型無望。"""
+    msg = str(err).lower()
+    return any(kw in msg for kw in ("429", "quota", "resource_exhausted", "rate limit",
+                                    "503", "unavailable", "overloaded"))
+
+
+# [斷路器] 單次執行內被判定「額度/負載用盡」的模型(全部 key 掃過且皆為
+# 額度/負載類錯誤)。同輪的後續呼叫直接跳過,不再對每把 key 空轉——
+# 一個衝刺週末四場 × 生成+審核 ≥8 次呼叫,主模型額度用盡時每次都
+# 空掃 6 把 key 會顯著拉長執行時間。模組層狀態,不跨執行記憶。
+_MODELS_TRIPPED: set = set()
+
+
 def generate_with_fallback(prompt: str, keys: List[str], models: List[str],
                            temperature: float = 0.7) -> Tuple[str, str]:
     """
@@ -1695,10 +1713,17 @@ def generate_with_fallback(prompt: str, keys: List[str], models: List[str],
     - 外層:依序嘗試模型清單(主模型 → 備用模型)
     - 內層:每個模型依序輪詢所有 API key(應付額度用盡)
     - 若錯誤顯示是模型不可用(404/下架),立即跳下一個模型,不浪費其他 key
+    - [斷路器] 同輪執行中,某模型的全部 key 都回額度/負載類錯誤 → 本輪
+      剩餘呼叫直接跳過該模型(404 類維持「單 key 即跳」現行行為,不斷路)
     回傳 (文案, 實際成功的模型名稱)。
     """
     last_error = None
     for model in models:
+        if model in _MODELS_TRIPPED:
+            print(f"[INFO] 模型 {model} 本輪已判定額度/負載用盡(斷路),跳過")
+            continue
+        all_quota = True          # 本模型的失敗是否全為額度/負載類
+        model_unavailable = False
         for idx, key in enumerate(keys, start=1):
             try:
                 print(f"[INFO] 嘗試 模型 {model} × API key #{idx}")
@@ -1712,9 +1737,17 @@ def generate_with_fallback(prompt: str, keys: List[str], models: List[str],
                 print(f"[WARN] {model} × key #{idx} 失敗:{e}")
                 if _looks_like_model_error(e):
                     print(f"[INFO] 判定為模型不可用,跳過 {model} 的其餘 key,換下一個模型")
+                    model_unavailable = True
                     break
+                if not _looks_like_quota_error(e):
+                    all_quota = False
                 time.sleep(1)
-    raise RuntimeError(f"所有模型 × 所有 API key 均失敗。最後錯誤:{last_error}")
+        if keys and all_quota and not model_unavailable:
+            _MODELS_TRIPPED.add(model)
+            print(f"[NOTICE] 模型 {model} 全部 {len(keys)} 把 key 皆為額度/負載類錯誤,"
+                  f"本輪執行的剩餘呼叫將跳過此模型")
+    raise RuntimeError(f"所有模型 × 所有 API key 均失敗。最後錯誤:"
+                       f"{last_error or '本輪所有模型均已被斷路器跳過(額度/負載用盡)'}")
 
 
 # =========================================================
@@ -1830,6 +1863,9 @@ def build_review_prompt(summary_text: str, post: str,
 2. 數據依據:文案中的所有名次、秒數、進站次數、積分,是否都能在{sources_desc}中找到依據?
    - {no_source_rule}
    - {dnf_rule}
+   - 指標名稱一致性:文案引用摘要數字時,指標名稱必須與摘要一致——
+     「代表圈平均」不得寫成「最快單圈」,「最快單圈」也不得寫成「平均/代表圈」,
+     數字對但指標張冠李戴 → 不通過
    - 合理的評論、觀點、修辭不算捏造
 3. 車手/車隊:文案提到的車手是否出現在摘要中?寫錯名次歸屬 → 不通過{notes_rule}
 

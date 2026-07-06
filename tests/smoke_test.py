@@ -385,6 +385,56 @@ m.fastf1.get_event_schedule = _sched_boom
 check('sched-fail graceful', m.find_pending_targets(m.AutoConfig(), 2099) == ([], [], []))
 m.fastf1.get_event_schedule = _bak_sched
 
+# 4.18 輪胎標籤自我說明化(胎齡 N 圈)+ 數字溯源相容
+fdf2 = pd.DataFrame({'Driver': ['D00'], 'LapTime_s': [92.4],
+                     'Compound': ['HARD'], 'TyreLife': [17]})
+txt = m.generate_summary_report(make_session('R'), 'R', fdf2, None, None, TMP)\
+    .read_text(encoding='utf-8')
+check('tyre label self-desc', '胎齡 17 圈(該套胎已使用圈數)' in txt
+      and 'TyreLife' not in txt and 'Life:' not in txt)
+check('tyre label no false lapref', any('第 17 圈' in i for i in m.factcheck_post_numbers(
+    '=== FB版 ===\n他在第 17 圈飆出最快圈\n=== IG版 ===\nx', txt)))  # 胎齡≠合法圈號來源
+
+# 4.19 審核員指標名稱一致性條款(有/無筆記兩形態皆須存在)
+check('metric clause no-notes', '指標名稱一致性' in m.build_review_prompt('摘', '文', 'R', True))
+check('metric clause with-notes', '指標名稱一致性' in m.build_review_prompt(
+    '摘', '文', 'R', True, notes_text='筆記'))
+
+# 4.20 模型斷路器:額度/負載全 key 掃過 → 本輪跳過;404 與混合錯誤不斷路
+m._MODELS_TRIPPED.clear()
+calls2 = []
+def _fg2(key, prompt, model, temperature=0.7):
+    calls2.append((model, key))
+    if model == 'quota2':
+        raise RuntimeError('429 quota exceeded')
+    if model == 'load2':
+        raise RuntimeError('503 UNAVAILABLE high demand')
+    if model == 'dead2':
+        raise RuntimeError('404 NOT_FOUND')
+    if model == 'flaky2':
+        raise RuntimeError('500 internal server error')
+    return 'ok'
+m.gemini_generate = _fg2
+_, used = m.generate_with_fallback('p', ['k1', 'k2'], ['quota2', 'good2'])
+check('breaker sweep trips', used == 'good2'
+      and sum(1 for c in calls2 if c[0] == 'quota2') == 2 and 'quota2' in m._MODELS_TRIPPED)
+_, used = m.generate_with_fallback('p', ['k1', 'k2'], ['quota2', 'good2'])
+check('breaker skips tripped', used == 'good2'
+      and sum(1 for c in calls2 if c[0] == 'quota2') == 2)   # 沒有新增嘗試
+_, used = m.generate_with_fallback('p', ['k1', 'k2'], ['load2', 'good2'])
+check('breaker 503 trips too', 'load2' in m._MODELS_TRIPPED)
+calls2.clear()                     # 404 類:維持單 key 即跳,且不斷路(下輪仍會試)
+_, _ = m.generate_with_fallback('p', ['k1', 'k2'], ['dead2', 'good2'])
+_, _ = m.generate_with_fallback('p', ['k1', 'k2'], ['dead2', 'good2'])
+check('breaker 404 untripped', sum(1 for c in calls2 if c[0] == 'dead2') == 2
+      and 'dead2' not in m._MODELS_TRIPPED)
+calls2.clear()                     # 混合錯誤(含非額度類)不斷路
+_, _ = m.generate_with_fallback('p', ['k1', 'k2'], ['flaky2', 'good2'])
+_, _ = m.generate_with_fallback('p', ['k1', 'k2'], ['flaky2', 'good2'])
+check('breaker mixed untripped', sum(1 for c in calls2 if c[0] == 'flaky2') == 4
+      and 'flaky2' not in m._MODELS_TRIPPED)
+m._MODELS_TRIPPED.clear()
+
 # ---- 5. 端對端:衝刺週末四場 ----
 m.load_api_keys = lambda f: ['k1']
 m.OUTPUT_DIR = TMP / 'e2e'; m.OUTPUT_DIR.mkdir()
