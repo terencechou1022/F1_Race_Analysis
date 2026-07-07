@@ -35,7 +35,8 @@ pip install -r requirements.txt
 python main.py          # 自動模式(生產執行方式)
 python app.py           # 網頁介面(選用):http://127.0.0.1:5000
 python tests/smoke_test.py            # 煙霧測試(離線,不需網路與 API key)
-python -W error::FutureWarning tests/smoke_test.py   # 順便驗證無棄用 API
+python tests/webapp_test.py           # 網頁介面測試(離線,合成 fixtures)
+python -W error::FutureWarning tests/smoke_test.py  # 順便驗證無棄用 API
 ```
 
 執行需要 `Gemini_API_Key.txt` 在腳本同目錄(多把 key 用換行/逗號分隔)。
