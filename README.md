@@ -16,6 +16,15 @@ python main.py
 預設為自動模式:自動偵測目前賽季、找出「最近完賽但未處理」的場次。
 建議掛上排程器於比賽日每 2 小時執行(冪等設計,重複執行不浪費 API 額度)。
 
+## 網頁介面(選用)
+
+```bash
+python app.py
+```
+
+開啟 http://127.0.0.1:5000(僅本機):瀏覽所有場次產出、
+FB/IG 文案一鍵複製、檢視配圖與事實查核報告、一鍵觸發執行並看即時 log。
+
 ## 賽事筆記(選用)
 
 summary 只有數據,沒有事故/天氣/罰時等敘事。想讓文案提到這些,
@@ -55,10 +64,11 @@ Antonelli 因前輪擋板故障失速,賽後被加罰 5 秒。
 ## 測試
 
 ```bash
-python tests/smoke_test.py
+python tests/smoke_test.py    # 分析管線與守門
+python tests/webapp_test.py   # 網頁介面
 ```
 
-離線執行,不需網路與 API key。
+皆為離線執行,不需網路與 API key。
 
 ## 開發
 

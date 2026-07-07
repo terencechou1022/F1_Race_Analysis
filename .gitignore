@@ -15,4 +15,5 @@ venv/
 
 # 測試暫存
 tests/.tmp/
+tests/.tmp_webapp/
 

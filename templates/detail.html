@@ -1,0 +1,59 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<title>{{ title }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head><body><div class="wrap">
+<p><a href="{{ url_for('index') }}">← 回控制台</a></p>
+<h1>{{ title }}</h1>
+<p><span class="badge {{ status }}">{{ {"done":"完成","failed":"失敗","pending":"未完成"}[status] }}</span></p>
+
+{% if failed_text %}
+<div class="alert"><b>FAILED_gemini.txt</b><pre>{{ failed_text }}</pre></div>
+{% endif %}
+
+{% if post_sections %}
+<h2>社群文案</h2>
+{% if post_header %}<p class="muted">{{ post_header }}</p>{% endif %}
+{% for platform, content in post_sections %}
+<div class="panel">
+  <b>{{ platform }} 版</b>
+  <button class="copy" onclick="copyText(this)" data-text="{{ content }}">複製</button>
+  <pre>{{ content }}</pre>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if charts %}
+<h2>配圖</h2>
+{% for c in charts %}
+<img class="chart" src="{{ url_for('serve_file', year=year, rnd=rnd, code=code, filename=c) }}" alt="{{ c }}">
+{% endfor %}
+{% endif %}
+
+{% if summary_text %}
+<h2>summary.txt(文案事實來源)</h2>
+<div class="panel"><pre>{{ summary_text }}</pre></div>
+{% endif %}
+
+{% if factcheck_text %}
+<h2>factcheck_report.txt(發文前人工複查用)</h2>
+<div class="panel"><pre>{{ factcheck_text }}</pre></div>
+{% endif %}
+
+{% if rejected %}
+<h2>被退稿的草稿</h2>
+{% for name, text in rejected %}
+<div class="panel"><b>{{ name }}</b><pre>{{ text }}</pre></div>
+{% endfor %}
+{% endif %}
+
+{% if downloads %}
+<h2>資料檔下載</h2>
+<div class="panel">
+{% for d in downloads %}
+<a href="{{ url_for('serve_file', year=year, rnd=rnd, code=code, filename=d) }}">{{ d }}</a><br>
+{% endfor %}
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='detail.js') }}"></script>
+</div></body></html>

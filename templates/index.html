@@ -1,0 +1,37 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<title>F1 Race Analysis</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head><body><div class="wrap">
+<h1>F1 賽後社群文案 — 控制台</h1>
+
+{% if alert_text %}
+<div class="alert"><b>SESSION_ALERT</b><pre>{{ alert_text }}</pre></div>
+{% endif %}
+
+<div class="panel">
+  <button id="runbtn" onclick="startRun()">執行 main.py(自動偵測待處理場次)</button>
+  <span id="runmsg" class="muted"></span>
+  <pre id="runlog"></pre>
+</div>
+
+<h2>已處理場次(output/)</h2>
+<div class="panel">
+{% if entries %}
+<table>
+<tr><th>場次</th><th>Session</th><th>狀態</th><th></th></tr>
+{% for e in entries %}
+<tr>
+  <td>{{ e.title or (e.year ~ " Round " ~ "%02d"|format(e.rnd)) }}</td>
+  <td>{{ e.code }}({{ e.label }})</td>
+  <td><span class="badge {{ e.status }}">{{ {"done":"完成","failed":"失敗","pending":"未完成"}[e.status] }}</span></td>
+  <td><a href="{{ url_for('session_detail', year=e.year, rnd=e.rnd, code=e.code) }}">檢視</a></td>
+</tr>
+{% endfor %}
+</table>
+{% else %}
+<p class="muted">output/ 目前沒有任何場次。按上方按鈕執行 main.py。</p>
+{% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='index.js') }}"></script>
+</div></body></html>
