@@ -64,10 +64,11 @@ Antonelli 因前輪擋板故障失速,賽後被加罰 5 秒。
 ## 測試
 
 ```bash
-python tests/smoke_test.py
+python tests/smoke_test.py    # 分析管線與守門
+python tests/webapp_test.py   # 網頁介面
 ```
 
-離線執行,不需網路與 API key。
+皆為離線執行,不需網路與 API key。
 
 ## 開發
 
