@@ -1,4 +1,4 @@
-# f1_race_analysis
+# F1_Race_Analysis
 
 F1 賽後自動分析 + FB/IG 社群文案生成器(萬用賽季版)。
 

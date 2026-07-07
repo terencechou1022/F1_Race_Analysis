@@ -1,4 +1,4 @@
-# F1 賽後社群文案自動化(f1_race_analysis)
+# F1 賽後社群文案自動化(F1_Race_Analysis)
 
 F1 賽後自動分析 + FB/IG 社群文案生成器。每場 Q/R/SQ/S 結束後由排程器執行,
 自動:偵測賽季與待處理場次 → FastF1 抓數據 → 分析 → 產出 CSV/Excel/摘要/配圖 →
