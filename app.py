@@ -70,8 +70,11 @@ def read_event_title(sdir: Path) -> str:
     return ""
 
 
+_ROUND_DIR_RE = re.compile(r"round_(\d{2})(?:_.*)?", re.IGNORECASE)
+
+
 def scan_output() -> List[Dict[str, Any]]:
-    """列出 output/{year}/round_{NN}/{code} 全部場次,新的在前。"""
+    """列出 output/{year}/Round_{NN}[_大獎賽名稱]/{code} 全部場次,新的在前。"""
     entries: List[Dict[str, Any]] = []
     if not OUTPUT_DIR.is_dir():
         return entries
@@ -79,7 +82,7 @@ def scan_output() -> List[Dict[str, Any]]:
         if not (ydir.is_dir() and re.fullmatch(r"\d{4}", ydir.name)):
             continue
         for rdir in sorted(ydir.iterdir(), reverse=True):
-            m = re.fullmatch(r"round_(\d{2})", rdir.name)
+            m = _ROUND_DIR_RE.fullmatch(rdir.name)
             if not (rdir.is_dir() and m):
                 continue
             for sdir in sorted(rdir.iterdir()):
@@ -96,8 +99,13 @@ def scan_output() -> List[Dict[str, Any]]:
     return entries
 
 
-def session_dir(year: int, rnd: int, code: str) -> Path:
-    return OUTPUT_DIR / str(year) / f"round_{rnd:02d}" / code
+def session_dir(year: int, rnd: int, code: str) -> Optional[Path]:
+    """找出該站的資料夾(檔名可能帶大獎賽名稱尾綴),找不到回傳 None。"""
+    year_dir = OUTPUT_DIR / str(year)
+    if not year_dir.is_dir():
+        return None
+    matches = sorted(year_dir.glob(f"Round_{rnd:02d}*"))
+    return (matches[0] / code) if matches else None
 
 
 def read_text(path: Path) -> Optional[str]:
@@ -186,7 +194,7 @@ def session_detail(year: int, rnd: int, code: str):
     if code not in ALLOWED_SESSIONS:
         abort(404)
     sdir = session_dir(year, rnd, code)
-    if not sdir.is_dir():
+    if sdir is None or not sdir.is_dir():
         abort(404)
 
     post_header, post_sections = "", []
@@ -216,7 +224,7 @@ def serve_file(year: int, rnd: int, code: str, filename: str):
     if code not in ALLOWED_SESSIONS or not FILE_NAME_RE.fullmatch(filename):
         abort(404)
     sdir = session_dir(year, rnd, code)
-    if not (sdir / filename).is_file():
+    if sdir is None or not (sdir / filename).is_file():
         abort(404)
     return send_from_directory(sdir, filename)
 

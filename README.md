@@ -64,7 +64,8 @@ Antonelli 因前輪擋板故障失速,賽後被加罰 5 秒。
 ## 測試
 
 ```bash
-python tests/smoke_test.py    # 分析管線與守門
+python tests/smoke_test.py    # 單元:分析管線與守門
+python tests/e2e_test.py      # 端到端:全管線 + 產出比對查核
 python tests/webapp_test.py   # 網頁介面
 ```
 
