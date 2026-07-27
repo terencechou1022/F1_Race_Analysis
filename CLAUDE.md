@@ -34,8 +34,9 @@ Gemini 生成 FB+IG 文案(三重守門)→ 事實查核報告。使用者複製
 pip install -r requirements.txt
 python main.py          # 自動模式(生產執行方式)
 python app.py           # 網頁介面(選用):http://127.0.0.1:5000
-python tests/smoke_test.py            # 煙霧測試(離線,不需網路與 API key)
-python tests/webapp_test.py           # 網頁介面測試(離線,合成 fixtures)
+python tests/smoke_test.py     # 煙霧測試(單元為主,離線)
+python tests/e2e_test.py       # 端到端測試(全管線 + 比對查核,離線)
+python tests/webapp_test.py    # 網頁介面測試(離線,合成 fixtures)
 python -W error::FutureWarning tests/smoke_test.py  # 順便驗證無棄用 API
 ```
 
@@ -120,8 +121,9 @@ summary 只有數據,沒有事故/天氣/罰時等敘事;賽事筆記
   `factcheck_post_numbers` 的溯源集合擴充;`SESSION_FOCUS` 不受影響
   (筆記是通用機制,不進 session 模板)。
 - 測試:`tests/smoke_test.py` §4.16(單元)、§5.5(注入攻擊 e2e)、
-  §5.6(並列不焊因果)。**本節內容須與程式碼行為同步維護**:任何筆記
-  相關行為變更,都要更新這節說明,並補正反兩向測試後全量跑過。
+  §5.6(並列不焊因果);`tests/e2e_test.py` P6(全管線含筆記)。
+  **本節內容須與程式碼行為同步維護**:任何筆記相關行為變更,都要更新這節
+  說明,並補正反兩向測試後全量跑過。
 
 ## 已修復的重大 bug(不要走回頭路)
 
@@ -140,14 +142,30 @@ summary 只有數據,沒有事故/天氣/罰時等敘事;賽事筆記
 
 ## 測試方法(沙箱無法連 F1 計時伺服器,測試全部離線)
 
-- `tests/smoke_test.py` 是既有測試母版:mock `google.genai`(必須在 import
-  腳本**之前**注入 `sys.modules`)、以合成 DataFrame 建假 session、
-  以 `importlib` 載入腳本模組。
+三支腳本都在 `tests/`,職責分工不重疊:
+
+| 腳本 | 職責 |
+|---|---|
+| `smoke_test.py` | 單元層母版:格式化、分類器、守門規則、fallback、查核函式正反兩向 |
+| `e2e_test.py` | 整條管線 + **最後的比對查核**(見下) |
+| `webapp_test.py` | `app.py` 網頁介面(合成 fixtures,不碰真實 `output/`) |
+
+- 共同慣例:mock `google.genai` 必須在 import 腳本**之前**注入 `sys.modules`;
+  以合成 DataFrame 建假 session;以 `importlib` 載入腳本模組。
 - 假 session 的 `laps` 需要 `pick_drivers`/`pick_fastest` 時,用測試檔內的
   `LapsShim`(繼承 DataFrame)。
 - 守門/查核類改動,必測正反兩向:合法內容通過 + 違規內容被退。
 - 賽程相關改動可用真實 `fastf1.get_event_schedule(2025)`(僅需一般網路)。
 - 一律以 `-W error::FutureWarning` 跑一次,防 pandas 棄用 API 滲入。
+
+### e2e_test.py 的比對查核(P3)為何獨立實作
+
+P3 把「使用者發文前的人工複查」自動化:最終文案 → summary.txt → 原始
+laps/results 全鏈溯源。驗證邏輯**刻意不呼叫 main.py 自己的查核函式**——
+用同一份程式碼驗證自己等於沒驗證,必須獨立重寫才有意義。
+因此 P3.0 有一組**自我檢測**(正反兩向餵入偽造 summary/文案),確保驗證
+函式真的會抓到問題,而不是因 regex 沒對到而永遠回傳空清單(假綠燈)。
+改動 summary 格式時,P3 的 regex 要跟著更新,P3.0 會在失效時亮紅燈。
 
 ## 已知邊界與待辦方向(與使用者確認過的)
 
@@ -167,7 +185,8 @@ summary 只有數據,沒有事故/天氣/罰時等敘事;賽事筆記
 - 一律以繁體中文(台灣用語)回覆。
 - 使用者重視主動確認:動手前先確認理解一致,有資訊落差就問。
 - 修改守門/查核相關程式碼時,必附正反兩向測試(合法通過 + 違規被退),
-  並跑 `python -W error::FutureWarning tests/smoke_test.py`。
+  並跑 `python -W error::FutureWarning tests/smoke_test.py`
+  與 `python tests/e2e_test.py`。
 
 ## 安全
 
