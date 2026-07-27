@@ -385,8 +385,40 @@ def filter_drivers(drivers: List[str], only: Optional[List[str]]) -> List[str]:
     return [d for d in drivers if d.upper() in wanted]
 
 
-def ensure_output_dir(year: int, rnd: int, session_code: str) -> Path:
-    out = OUTPUT_DIR / str(year) / f"round_{rnd:02d}" / session_code
+_EVENT_NAME_UNSAFE_RE = re.compile(r'[<>:"/\\|?*]')
+
+
+def _slugify_event_name(name: Optional[str]) -> str:
+    """大獎賽名稱轉檔案系統安全的資料夾名稱片段:移除路徑不安全字元,空白改底線。"""
+    if not name:
+        return ""
+    safe = _EVENT_NAME_UNSAFE_RE.sub("", str(name).strip())
+    return re.sub(r"\s+", "_", safe)
+
+
+def resolve_round_dir(year: int, rnd: int, event_name: Optional[str] = None) -> Path:
+    """
+    決定該站輸出資料夾路徑(Round_{NN}_{大獎賽名稱}),不建立目錄。
+    [冪等] 若該年份下已存在 Round_{NN}* 資料夾,一律沿用既有的——避免賽程表與
+    session.event 兩處大獎賽名稱來源不一致、或未來命名規則再調整時,誤判成
+    「未處理」而重新產生資料夾、重跑一次 Gemini(浪費額度、也造成同站兩個資料夾)。
+    只有全新站次才依 event_name 產生帶名稱的新資料夾。
+    比對不分大小寫(Windows 檔案系統本就不分大小寫):本功能上線前產生的
+    舊格式資料夾(全小寫 round_NN,無大獎賽名稱)仍會被正確找到並沿用。
+    """
+    year_dir = OUTPUT_DIR / str(year)
+    if year_dir.is_dir():
+        matches = sorted(year_dir.glob(f"Round_{rnd:02d}*"))
+        if matches:
+            return matches[0]
+    slug = _slugify_event_name(event_name)
+    name = f"Round_{rnd:02d}_{slug}" if slug else f"Round_{rnd:02d}"
+    return year_dir / name
+
+
+def ensure_output_dir(year: int, rnd: int, session_code: str,
+                      event_name: Optional[str] = None) -> Path:
+    out = resolve_round_dir(year, rnd, event_name) / session_code
     out.mkdir(parents=True, exist_ok=True)
     return out
 
@@ -520,12 +552,12 @@ def find_pending_targets(cfg: AutoConfig, year: int) -> Tuple[
             if now_utc < session_dt + buffer_td:
                 continue  # 還沒比完(或資料大概還沒好)
             if lookback_td is not None and now_utc - session_dt > lookback_td:
-                out_dir = OUTPUT_DIR / str(year) / f"round_{rnd:02d}" / code
+                out_dir = resolve_round_dir(year, rnd, ev_name) / code
                 if not social_post_path(out_dir).exists():
                     skipped_rounds.add(rnd)
                 continue  # 超出回溯窗口
 
-            out_dir = OUTPUT_DIR / str(year) / f"round_{rnd:02d}" / code
+            out_dir = resolve_round_dir(year, rnd, ev_name) / code
             if not cfg.force_rerun and social_post_path(out_dir).exists():
                 continue  # 已處理過
 
@@ -2067,7 +2099,7 @@ def process_one(cfg: AutoConfig, year: int, rnd: int, session_code: str,
         print(f"[SKIP] {year} Round {rnd} {session_code}: 沒有車手資料")
         return False
 
-    out_dir = ensure_output_dir(year, rnd, session_code)
+    out_dir = ensure_output_dir(year, rnd, session_code, event_name)
 
     # ---- [賽事筆記] 載入使用者筆記(選用;無檔案 = 無筆記,流程不變)----
     notes_text, notes_meta = load_race_notes(cfg, year, rnd, session_code)

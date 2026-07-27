@@ -14,7 +14,7 @@ python main.py
 
 echo.
 echo ============================================================
-echo  執行結束。文案在 output\{年份}\round_{站次}\{場次}\social_post.txt
+echo  執行結束。文案在 output\{年份}\Round_{站次}_{大獎賽}\{場次}\social_post.txt
 echo  發文前請複查同目錄的 factcheck_report.txt
 echo ============================================================
 pause

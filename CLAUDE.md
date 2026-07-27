@@ -136,7 +136,7 @@ python -W error::FutureWarning tests/smoke_test.py  # 順便驗證無棄用 API
 ## 輸出結構(生產)
 
 ```
-output/{year}/round_{NN}/{Q|R|SQ|S}/
+output/{year}/Round_{NN}_{大獎賽名稱}/{Q|R|SQ|S}/
 ├── social_post.txt        # 完成標記 + 最終文案(FB版+IG版)
 ├── summary.txt            # 文案唯一事實來源
 ├── factcheck_report.txt   # 查核軌跡
@@ -145,3 +145,11 @@ output/{year}/round_{NN}/{Q|R|SQ|S}/
 └── FAILED_gemini.txt / rejected_draft_N.txt   # 僅失敗時存在
 output/SESSION_ALERT.txt                        # 僅名稱異動時存在
 ```
+
+站次資料夾名稱帶大獎賽名稱(`resolve_round_dir`,main.py):`Round_{NN}` 後綴
+為 `_` + EventName 消毒後的字串(空白轉底線、移除路徑不安全字元)。**冪等關鍵**:
+只要該年份下已存在 `Round_{NN}*` 資料夾(不論尾綴),一律沿用既有的,不會因大獎賽
+名稱來源不一致而誤判成未處理、重複產生資料夾或重跑 Gemini;比對**不分大小寫**,
+本功能上線前產生的舊格式資料夾(全小寫 round_NN,無大獎賽名稱)仍會被找到並沿用。
+app.py 的 `session_dir`/`scan_output` 以同一(不分大小寫)規則解析,兩者
+(main.py 產生、app.py 讀取)須保持一致。
