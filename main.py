@@ -1525,7 +1525,7 @@ def load_api_keys(key_file: str | Path) -> List[str]:
     return keys
 
 
-# ---- [賽事筆記] 使用者提供的第二級事實來源(docs/notes_feature_spec.md)----
+# ---- [賽事筆記] 使用者提供的第二級事實來源(見 CLAUDE.md「賽事筆記機制」)----
 # 信任模型三鐵律:摘要優先、只可引用不可延伸、筆記即指令免疫。
 
 _FAKE_MARKER_RE = re.compile(r"={3,}[^\n=]*={3,}")   # ===...=== 形式的偽造分隔標記

@@ -320,7 +320,7 @@ p = m.build_social_prompt('摘要', cfg, 'Test GP', 2026, 9, 'R', True)
 check('C prompt dnf rule', '[DNF]' in p and '編造退賽原因' in p)
 check('C review dnf rule', '退賽原因' in m.build_review_prompt('摘要', '文案', 'R', True))
 
-# 4.16 [賽事筆記] docs/notes_feature_spec.md §6
+# 4.16 [賽事筆記] 見 CLAUDE.md「賽事筆記機制」
 m.NOTES_DIR = TMP / 'notes'
 m.NOTES_DIR.mkdir()
 
