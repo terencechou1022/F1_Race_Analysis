@@ -172,12 +172,13 @@ class AutoConfig:
     # ---- Gemini / 社群文案 ----
     enable_gemini: bool = True
     gemini_key_file: str = "Gemini_API_Key.txt"
-    # [第9點徹底解決] 模型 fallback 清單:依序嘗試,主模型掛掉自動換下一個。
-    # gemini-3.5-flash 為 2026/05 起的 GA 穩定版;3.1-flash-lite 為長期穩定版;
-    # gemini-flash-latest 為官方自動更新別名,當前兩者都被下架時的最後保險。
+    # 模型清單:依序嘗試,前面的掛掉自動換下一個(fallback 機制保留,
+    # 想釘選特定版本時把版本號加在別名前面即可)。
+    # [使用者決定,2026-07-27] 統一使用滾動別名 gemini-flash-latest,
+    # 由 Google 自動指向當下最新的 flash 版模型,不再釘選版本號。
+    # 取捨:換版時不會有通知,文風/退稿率可能靜默變化(守門三關仍擋得住
+    # 錯誤內容,但擋不住風格漂移);換來的是模型下架時不必手動改清單。
     gemini_models: List[str] = field(default_factory=lambda: [
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite",
         "gemini-flash-latest",
     ])
     # [防呆] 文案品質守門:
@@ -2271,10 +2272,8 @@ if __name__ == "__main__":
 
         enable_gemini=True,
         gemini_key_file="Gemini_API_Key.txt",
-        # 主模型(GA 穩定版)→ 備用 → 官方自動更新別名;主模型掛掉自動遞補
+        # 滾動別名:自動指向當下最新的 flash 版模型,不釘選版本號
         gemini_models=[
-            "gemini-3.5-flash",
-            "gemini-3.1-flash-lite",
             "gemini-flash-latest",
         ],
         enable_llm_review=True,     # 文案雙重守門(靜態規則 + AI 審核員)
