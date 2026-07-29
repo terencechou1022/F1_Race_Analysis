@@ -269,7 +269,7 @@ def _decimals(text):
 def _body(post):
     """
     剝除 social_post.txt 的產出資訊標頭再驗證。
-    標頭含模型名稱(如 gemini-3.5-flash)與產出時間,不是文案的事實宣稱;
+    標頭含模型名稱(可能帶版本號如 x.y-flash)與產出時間,不是事實宣稱;
     main.py 也是在「加上標頭之前」對文案本體做查核,兩邊範圍必須一致。
     """
     lines = post.splitlines()
