@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # windows-latest 不是隨手選的：main.py 的 resolve_round_dir 刻意依賴 Windows
+    # 檔案系統不分大小寫（docstring 已載明），用 glob('Round_NN*') 沿用舊版產生的
+    # 小寫 round_NN 資料夾。pathlib.glob 在 Linux 分大小寫，所以 smoke_test.py 的
+    # 「resolve reuses legacy lowercase dir」在 ubuntu 必然失敗。跑在專案實際的目標
+    # 平台上，才是驗證這個行為而不是繞過它。
+    runs-on: windows-latest
+    # 測試會輸出中文，Windows runner 的主控台代碼頁不是 UTF-8，不強制會 UnicodeEncodeError。
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 安裝相依套件
+        run: pip install -r requirements.txt
+
+      # 三支測試都是獨立腳本（見 README「測試」），刻意各自一個進程執行：
+      # webapp_test.py 在模組層斷言 'main' not in sys.modules，用來守住「app.py
+      # 不得連帶載入 main/fastf1」。與其他兩支同進程跑會被它們的
+      # sys.modules['main'] 注入污染而誤報失敗，那個斷言本來就只在乾淨的
+      # 解譯器裡才有意義。三支都不需要網路或 API 金鑰。
+      - name: 單元測試（分析管線與守門）
+        run: python tests/smoke_test.py
+
+      - name: 網頁介面測試
+        run: python tests/webapp_test.py
+
+      - name: 端到端測試（全管線 + 產出比對查核）
+        run: python tests/e2e_test.py
