@@ -28,7 +28,12 @@ jobs:
       - name: 安裝相依套件
         run: pip install -r requirements.txt
 
-      # 三支測試都是獨立腳本（見 README「測試」），刻意各自一個進程執行：
+      # guards.py 的守門函式是純函式（不需 fastf1、不需 API 金鑰），
+      # 所以能用一般的 pytest 測。放在最前面：它最快，壞了先知道。
+      - name: 守門函式單元測試（pytest）
+        run: python -m pytest tests/test_guards.py -q
+
+      # 另外三支測試是獨立腳本（見 README「測試」），刻意各自一個進程執行：
       # webapp_test.py 在模組層斷言 'main' not in sys.modules，用來守住「app.py
       # 不得連帶載入 main/fastf1」。與其他兩支同進程跑會被它們的
       # sys.modules['main'] 注入污染而誤報失敗，那個斷言本來就只在乾淨的

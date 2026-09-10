@@ -109,13 +109,13 @@ flowchart TD
 
 每一條「跳過 / 中止」的分支都不會留下 `social_post.txt`，所以重複執行永遠安全：資料還沒上齊、額度用盡、守門退稿，下次跑就自動重試。
 
-## 網頁介面（選用）
+## 本機操作工具（`app.py`）
 
 ```bash
 python app.py
 ```
 
-開啟 http://127.0.0.1:5000（僅本機）：瀏覽所有場次產出、FB/IG 文案一鍵複製、檢視配圖與事實查核報告、一鍵觸發執行並看即時 log。
+開啟 http://127.0.0.1:5000（僅本機）：瀏覽所有場次產出、FB/IG 文案一鍵複製、檢視配圖與事實查核報告、一鍵觸發執行並看即時 log。需要 fastf1，觸發執行時另需 Gemini API key。
 
 ## 賽事筆記（選用）
 
@@ -152,12 +152,24 @@ Antonelli 因前輪擋板故障失速，賽後被加罰 5 秒。
 ## 測試
 
 ```bash
-python tests/smoke_test.py    # 單元：分析管線與守門
-python tests/e2e_test.py      # 端到端：全管線 + 產出比對查核
-python tests/webapp_test.py   # 網頁介面
+python -m pytest tests/test_guards.py -q   # 34 個：guards.py 兩支守門函式
+python tests/smoke_test.py                 # 111 項：分析管線與守門
+python tests/e2e_test.py                   # 139 項：全管線 + 產出比對查核
+python tests/webapp_test.py                #  33 項：網頁介面
 ```
 
 皆為離線執行，不需網路與 API key。
+
+守門函式抽到 `guards.py` 之後才有第一支 pytest：在那之前要測它們就得載入 `main.py`，
+而那會連帶拉進 fastf1 與 google.genai、並在模組層建立 `fastf1_cache/` 與 `output/`。
+
+`test_guards.py` 每支函式都測兩個方向，而且**「不該擋」那半邊比「該擋」重要**——
+守門誤報的後果是把一篇正確的文案退回修正輪，兩輪額度燒完照樣不出貨，
+而錯誤訊息還會指向一個不存在的問題。
+
+另外三支刻意各自一個進程執行：`webapp_test.py` 在模組層斷言
+`'main' not in sys.modules`，用來守住「`app.py` 不得連帶載入 main/fastf1」。
+同進程跑會被其他兩支的 `sys.modules['main']` 注入污染而誤報。
 
 ## 開發
 

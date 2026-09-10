@@ -40,6 +40,9 @@ import pandas as pd    # noqa: E402
 import re as _re       # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+# main.py 以路徑載入，但它自己會 `from guards import ...`——
+# 所以 repo 根目錄必須在 sys.path 上，否則 main 的匯入會失敗。
+sys.path.insert(0, str(ROOT))
 spec = importlib.util.spec_from_file_location('main',
                                               ROOT / 'main.py')
 m = importlib.util.module_from_spec(spec)

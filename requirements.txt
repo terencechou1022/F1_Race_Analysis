@@ -4,3 +4,6 @@ openpyxl>=3.1
 matplotlib>=3.7
 google-genai>=1.0
 flask>=3.0
+
+# 測試（guards.py 的守門函式為純函式，可用一般 pytest 測）
+pytest>=8.0
